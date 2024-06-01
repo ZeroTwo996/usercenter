@@ -29,33 +29,36 @@ func startRecord() {
 	}
 
 	var wg sync.WaitGroup
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(time.Duration(60*1000/config.ACCELERATIONRATIO) * time.Millisecond)
 	defer ticker.Stop()
 
+	preTime := time.Now().Round(time.Minute)
+
 	for range ticker.C {
-		date := time.Now().Format("2006-01-02 15:04:00")
+		curTime := preTime.Add(time.Minute)
 		for zoneID, sites := range zones {
 			for _, siteID := range sites {
 				wg.Add(1)
-				go func(zoneID string, siteID string, date string) {
+				go func(zoneID string, siteID string, dateStr string) {
 					defer wg.Done()
 					// 查询 site 的实例数
 					instances, err := service.RecordCountForSite(zoneID, siteID)
 					if err != nil {
-						log.Printf("Failed to get instance count for site %s: %v", siteID, err)
+						fmt.Printf("Failed to get instance count for site %s: %v", siteID, err)
 						return
 					}
-					log.Printf("Site %s has %d instances", siteID, instances)
+					fmt.Printf("%s: Site %s has %d instances", dateStr, siteID, instances)
 
 					// 插入最新数据
-					err = service.InsertRecord(zoneID, siteID, date, instances)
+					err = service.InsertRecord(zoneID, siteID, dateStr, instances)
 					if err != nil {
-						log.Printf("Failed to insert record for site %s: %v", siteID, err)
+						fmt.Printf("Failed to insert record for site %s: %v", siteID, err)
 					}
-				}(zoneID, siteID, date)
+				}(zoneID, siteID, curTime.Format("2006-01-02 15:04:00"))
 			}
 		}
 		wg.Wait()
+		preTime = curTime
 	}
 }
 

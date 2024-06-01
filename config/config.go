@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"strconv"
 )
 
 var (
@@ -16,7 +17,8 @@ var (
 	MYSQLPASSWORD string // MYSQL服务密码
 	MYSQLDATABASE string // MYSQL服务数据库
 
-	MAXHISTORYNUMBER = 180
+	ACCELERATIONRATIO int
+	MAXHISTORYNUMBER  = 180
 )
 
 func init() {
@@ -53,5 +55,13 @@ func init() {
 	MYSQLDATABASE = os.Getenv("MYSQL_DATABASE")
 	if MYSQLDATABASE == "" {
 		log.Fatalf("Failed to get mysql database from env")
+	}
+
+	var err error
+	ACCELERATIONRATIO, err = strconv.Atoi(os.Getenv("ACCELERATION_RATIO"))
+	if err != nil {
+		log.Fatal("Failed to get acceleration ratio from env")
+	} else if ACCELERATIONRATIO == 0 {
+		log.Fatal("Acceleration ratio cannot be zero")
 	}
 }
