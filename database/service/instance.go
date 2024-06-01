@@ -131,7 +131,7 @@ func getAvailableInstanceFromCenter(zoneID string) (*model.Instance, error) {
 	instance := &model.Instance{ZoneID: zoneID}
 
 	query := `SELECT * FROM instance_%s WHERE is_elastic = 1 AND status = 'available' ORDER BY RAND() LIMIT 1`
-	stmt, err := database.DB.Prepare(fmt.Sprint(query, zoneID))
+	stmt, err := database.DB.Prepare(fmt.Sprintf(query, zoneID))
 	if err != nil {
 		return nil, err
 	}
