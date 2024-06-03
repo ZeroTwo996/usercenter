@@ -105,7 +105,7 @@ func main() {
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
 				// 启动记录任务
-				startRecord()
+				// startRecord()
 			},
 			OnStoppedLeading: func() {
 				klog.Fatalf("leaderelection lost")
