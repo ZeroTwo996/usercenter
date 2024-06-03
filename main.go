@@ -44,15 +44,15 @@ func startRecord() {
 					// 查询 site 的实例数
 					instances, err := service.RecordCountForSite(zoneID, siteID)
 					if err != nil {
-						fmt.Printf("Failed to get instance count for site %s: %v", siteID, err)
+						fmt.Printf("Failed to get instance count for site %s: %v\n", siteID, err)
 						return
 					}
-					fmt.Printf("%s: Site %s has %d instances", dateStr, siteID, instances)
+					fmt.Printf("%s: Site %s has %d instances\n", dateStr, siteID, instances)
 
 					// 插入最新数据
 					err = service.InsertRecord(zoneID, siteID, dateStr, instances)
 					if err != nil {
-						fmt.Printf("Failed to insert record for site %s: %v", siteID, err)
+						fmt.Printf("Failed to insert record for site %s: %v\n", siteID, err)
 					}
 				}(zoneID, siteID, curTime.Format("2006-01-02 15:04:00"))
 			}

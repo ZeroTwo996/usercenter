@@ -21,8 +21,11 @@ func GetInstanceAndLogin(zoneID string, siteID string, deviceID string) (*model.
 	instance, err := getAvailableInstanceFromSite(zoneID, siteID)
 	if err == nil {
 		// 边缘有可用实例
-		instance, err = updateInstanceStatus(instance, deviceID, "using")
-		return instance, err
+		instance, err := updateInstanceStatus(instance, deviceID, "using")
+		if err != nil {
+			return nil, fmt.Errorf("failed to update instance information in %s: %v", siteID, err)
+		}
+		return instance, nil
 	}
 
 	// 获取中心可用实例
@@ -30,11 +33,14 @@ func GetInstanceAndLogin(zoneID string, siteID string, deviceID string) (*model.
 	if err == nil {
 		// 中心有可用实例
 		instance.SiteID = siteID // 弹性实例需要额外给site_id赋值
-		instance, err = updateInstanceStatus(instance, deviceID, "using")
-		return instance, err
+		instance, err := updateInstanceStatus(instance, deviceID, "using")
+		if err != nil {
+			return nil, fmt.Errorf("failed to update instance information in %s: %v", zoneID, err)
+		}
+		return instance, nil
 	}
 
-	return nil, err
+	return nil, fmt.Errorf("no available instance to be found: %v", err)
 }
 
 // 根据终端id更新实例信息
@@ -43,7 +49,7 @@ func UpdateInstanceWithDeviceId(ZoneID string, deviceID string) error {
 
 	err := database.DB.QueryRow(fmt.Sprintf(`SELECT is_elastic FROM instance_%s WHERE device_id = ? LIMIT 1`, ZoneID), deviceID).Scan(&isElastic)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s cannot be found in %s table: %v", deviceID, ZoneID, err)
 	}
 
 	var updateStmt string
@@ -55,7 +61,7 @@ func UpdateInstanceWithDeviceId(ZoneID string, deviceID string) error {
 
 	_, err = database.DB.Exec(updateStmt, deviceID)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to update instance information when %s logged out from %s: %v", deviceID, ZoneID, err)
 	}
 	return nil
 }
