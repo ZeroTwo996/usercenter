@@ -40,7 +40,7 @@ func GetInstanceAndLogin(zoneID string, siteID string, deviceID string) (*model.
 		return instance, nil
 	}
 
-	return nil, fmt.Errorf("no available instance to be found: %v", err)
+	return nil, fmt.Errorf("no available instance to be found for %s: %v", deviceID, err)
 }
 
 // 根据终端id更新实例信息
