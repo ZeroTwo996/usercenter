@@ -7,18 +7,15 @@ import (
 )
 
 var (
-	USERCENTERPORT string // 用户交互模块服务端口
+	USERCENTERPORT = "8888" // 用户交互模块服务端口
 
-	K8SNAMSPACE string // K8S命名空间
-
-	MYSQLHOST     string // MYSQL服务地址
-	MYSQLPORT     string // MYSQL服务端口
-	MYSQLUSER     string // MYSQL服务用户
-	MYSQLPASSWORD string // MYSQL服务密码
-	MYSQLDATABASE string // MYSQL服务数据库
-
-	ACCELERATIONRATIO int
-	MAXHISTORYNUMBER  = 180
+	K8SNAMSPACE       string // K8S命名空间
+	MYSQLHOST         string // MYSQL服务地址
+	MYSQLPORT         string // MYSQL服务端口
+	MYSQLUSER         string // MYSQL服务用户
+	MYSQLPASSWORD     string // MYSQL服务密码
+	MYSQLDATABASE     string // MYSQL服务数据库
+	ACCELERATIONRATIO int    // 测试时间加速比例
 )
 
 func init() {
@@ -27,17 +24,12 @@ func init() {
 		log.Fatalf("Failed to get namespace from env")
 	}
 
-	USERCENTERPORT = os.Getenv("USERCENTER_PORT")
-	if USERCENTERPORT == "" {
-		log.Fatalf("Failed to get usercenter port from env")
-	}
-
-	MYSQLHOST = os.Getenv("MYSQL_HOST")
+	MYSQLHOST = os.Getenv("MYSQL_SERVICE_SERVICE_HOST")
 	if MYSQLHOST == "" {
 		log.Fatalf("Failed to get mysql host from env")
 	}
 
-	MYSQLPORT = os.Getenv("MYSQL_PORT")
+	MYSQLPORT = os.Getenv("MYSQL_SERVICE_SERVICE_PORT")
 	if MYSQLPORT == "" {
 		log.Fatalf("Failed to get mysql port from env")
 	}
