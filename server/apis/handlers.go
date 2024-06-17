@@ -60,7 +60,7 @@ func DeviceLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := service.UpdateInstanceWithDeviceId(zoneID, deviceID)
+	err := service.LogoutDevice(zoneID, deviceID)
 	if err != nil {
 		log.Printf("Failed to logout: %v", err)
 		SendErrorResponse(w, &ErrorCodeWithMessage{
