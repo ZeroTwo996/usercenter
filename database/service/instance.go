@@ -22,7 +22,7 @@ func GetInstanceAndLogin(zoneID string, siteID string, deviceID string) (*model.
 	instance, err := getAvailableInstanceFromSite(zoneID, siteID)
 	if err == nil {
 		// 边缘有可用实例
-		instance, err := loginDevice(instance, deviceID, false)
+		instance, err := loginDevice(instance, deviceID, "site")
 		if err != nil {
 			return nil, fmt.Errorf("failed to update instance information in %s: %v", siteID, err)
 		}
@@ -34,7 +34,7 @@ func GetInstanceAndLogin(zoneID string, siteID string, deviceID string) (*model.
 	if err == nil {
 		// 中心有可用实例
 		instance.SiteID = siteID // 弹性实例需要额外给site_id赋值
-		instance, err := loginDevice(instance, deviceID, true)
+		instance, err := loginDevice(instance, deviceID, "center")
 		if err != nil {
 			return nil, fmt.Errorf("failed to update instance information in %s: %v", zoneID, err)
 		}
@@ -157,12 +157,12 @@ func getAvailableInstanceFromCenter(zoneID string) (*model.Instance, error) {
 }
 
 // loginDevice 更新实例的状态和设备ID
-func loginDevice(instance *model.Instance, deviceID string, is_elastic bool) (*model.Instance, error) {
+func loginDevice(instance *model.Instance, deviceID string, position string) (*model.Instance, error) {
 	var err error
-	if is_elastic {
+	if position == "center" {
 		updateStmt := fmt.Sprintf(`UPDATE instance_%s SET site_id = ?, status = "using", device_id = ? WHERE instance_id = ?`, instance.ZoneID)
 		_, err = database.DB.Exec(updateStmt, instance.SiteID, deviceID, instance.InstanceID)
-	} else {
+	} else if position == "site" {
 		updateStmt := fmt.Sprintf(`UPDATE instance_%s SET status = "using", device_id = ? WHERE instance_id = ?`, instance.ZoneID)
 		_, err = database.DB.Exec(updateStmt, deviceID, instance.InstanceID)
 	}
