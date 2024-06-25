@@ -10,7 +10,6 @@ import (
 )
 
 var loginMutex sync.Mutex
-var logoutMutex sync.Mutex
 
 // 获取可用实例并接入终端
 func GetInstanceAndLogin(zoneID string, siteID string, deviceID string) (*model.Instance, error) {
@@ -46,10 +45,6 @@ func GetInstanceAndLogin(zoneID string, siteID string, deviceID string) (*model.
 
 // 根据终端id更新实例信息，登出设备
 func LogoutDevice(ZoneID string, deviceID string) error {
-
-	logoutMutex.Lock()
-	defer logoutMutex.Unlock()
-
 	isElastic := -1 // 初始值，避免未使用的错误
 
 	err := database.DB.QueryRow(fmt.Sprintf(`SELECT is_elastic FROM instance_%s WHERE device_id = ? LIMIT 1`, ZoneID), deviceID).Scan(&isElastic)
