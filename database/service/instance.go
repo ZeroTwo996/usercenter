@@ -1,46 +1,64 @@
 package service
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"strings"
-	"sync"
 	"usercenter/database"
 	"usercenter/database/model"
 )
 
-var loginMutex sync.Mutex
-
 // 获取可用实例并接入终端
 func GetInstanceAndLogin(zoneID string, siteID string, deviceID string) (*model.Instance, error) {
+	instance := &model.Instance{ZoneID: zoneID}
 
-	loginMutex.Lock()
-	defer loginMutex.Unlock()
-
-	// 获取边缘可用的实例
-	instance, err := getAvailableInstanceFromSite(zoneID, siteID)
-	if err == nil {
-		// 边缘有可用实例
-		instance, err := loginDevice(instance, deviceID, "site")
-		if err != nil {
-			return nil, fmt.Errorf("failed to update instance information in %s: %v", siteID, err)
-		}
-		return instance, nil
+	tx, err := database.DB.Begin()
+	if err != nil {
+		return nil, err
 	}
 
-	// 获取中心可用实例
-	instance, err = getAvailableInstanceFromCenter(zoneID)
-	if err == nil {
-		// 中心有可用实例
-		instance.SiteID = siteID // 弹性实例需要额外给site_id赋值
-		instance, err := loginDevice(instance, deviceID, "center")
-		if err != nil {
-			return nil, fmt.Errorf("failed to update instance information in %s: %v", zoneID, err)
-		}
-		return instance, nil
+	var isElastic = false
+	siteQuery := fmt.Sprintf(`SELECT * FROM instance_%s WHERE site_id = ? AND is_elastic = 0 AND status = 'available' LIMIT 1 FOR UPDATE`, zoneID)
+	// 先查询边缘是否有可用实例
+	err = tx.QueryRow(siteQuery, siteID).Scan(&instance.SiteID, &instance.ServerIP, &instance.InstanceID, &instance.PodName, &instance.Port, &instance.IsElastic, &instance.Status, &instance.DeviceId)
+	if err == sql.ErrNoRows { // 如果边缘没有的可用实例，再获取中心的可用实例
+		isElastic = true
+		centerQuery := fmt.Sprintf(`SELECT * FROM instance_%s WHERE is_elastic = 1 AND status = 'available' LIMIT 1 FOR UPDATE`, zoneID)
+		err = tx.QueryRow(centerQuery).Scan(&instance.SiteID, &instance.ServerIP, &instance.InstanceID, &instance.PodName, &instance.Port, &instance.IsElastic, &instance.Status, &instance.DeviceId)
 	}
 
-	return nil, fmt.Errorf("no available instance to be found for %s: %v", deviceID, err)
+	if err != nil {
+		tx.Rollback()
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("no available instance found for device %s", deviceID)
+		} else {
+			return nil, fmt.Errorf("error quering available instances: %w", err)
+		}
+	}
+
+	var updateStmt string
+	if isElastic { // 如果是弹性实例，则需要修改site_id
+		updateStmt = fmt.Sprintf(`UPDATE instance_%s SET site_id = ?, status = "using", device_id = ? WHERE instance_id = ?`, instance.ZoneID)
+		_, err = tx.Exec(updateStmt, instance.SiteID, deviceID, instance.InstanceID)
+	} else {
+		updateStmt = fmt.Sprintf(`UPDATE instance_%s SET status = "using", device_id = ? WHERE instance_id = ?`, instance.ZoneID)
+		_, err = tx.Exec(updateStmt, deviceID, instance.InstanceID)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("error updating instance status: %w", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, fmt.Errorf("error commiting transaction: %w", err)
+	}
+
+	instance.Status = "using"
+	instance.DeviceId = deviceID
+
+	return instance, nil
 }
 
 // 根据终端id更新实例信息，登出设备
@@ -113,60 +131,4 @@ func GetSiteListInZone(ZoneID string) ([]string, error) {
 	}
 
 	return siteList, nil
-}
-
-func getAvailableInstanceFromSite(ZoneID string, siteID string) (*model.Instance, error) {
-	instance := &model.Instance{ZoneID: ZoneID}
-
-	query := `SELECT * FROM instance_%s WHERE site_id = ? AND is_elastic = 0 AND status = 'available' ORDER BY RAND() LIMIT 1`
-	stmt, err := database.DB.Prepare(fmt.Sprintf(query, ZoneID))
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-
-	var ignoreId int
-	err = stmt.QueryRow(siteID).Scan(&ignoreId, &instance.SiteID, &instance.ServerIP, &instance.InstanceID, &instance.PodName, &instance.Port, &instance.IsElastic, &instance.Status, &instance.DeviceId)
-	if err != nil {
-		return nil, err
-	}
-	return instance, nil
-}
-
-func getAvailableInstanceFromCenter(zoneID string) (*model.Instance, error) {
-	instance := &model.Instance{ZoneID: zoneID}
-
-	query := `SELECT * FROM instance_%s WHERE is_elastic = 1 AND status = 'available' ORDER BY RAND() LIMIT 1`
-	stmt, err := database.DB.Prepare(fmt.Sprintf(query, zoneID))
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-
-	var ignoreId int
-	err = stmt.QueryRow().Scan(&ignoreId, &instance.SiteID, &instance.ServerIP, &instance.InstanceID, &instance.PodName, &instance.Port, &instance.IsElastic, &instance.Status, &instance.DeviceId)
-	if err != nil {
-		return nil, err
-	}
-	return instance, nil
-}
-
-// loginDevice 更新实例的状态和设备ID
-func loginDevice(instance *model.Instance, deviceID string, position string) (*model.Instance, error) {
-	var err error
-	if position == "center" {
-		updateStmt := fmt.Sprintf(`UPDATE instance_%s SET site_id = ?, status = "using", device_id = ? WHERE instance_id = ?`, instance.ZoneID)
-		_, err = database.DB.Exec(updateStmt, instance.SiteID, deviceID, instance.InstanceID)
-	} else if position == "site" {
-		updateStmt := fmt.Sprintf(`UPDATE instance_%s SET status = "using", device_id = ? WHERE instance_id = ?`, instance.ZoneID)
-		_, err = database.DB.Exec(updateStmt, deviceID, instance.InstanceID)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	instance.Status = "using"
-	instance.DeviceId = deviceID
-
-	return instance, nil
 }
