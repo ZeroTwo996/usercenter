@@ -5,12 +5,19 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"usercenter/database"
 	"usercenter/database/model"
 )
 
+var loginMutex sync.Mutex
+
 // 获取可用实例并接入终端
 func GetInstanceAndLogin(zoneID string, siteID string, deviceID string) (*model.Instance, error) {
+
+	loginMutex.Lock()
+	defer loginMutex.Unlock()
+
 	instance := &model.Instance{ZoneID: zoneID}
 
 	tx, err := database.DB.Begin()
@@ -19,12 +26,12 @@ func GetInstanceAndLogin(zoneID string, siteID string, deviceID string) (*model.
 	}
 
 	var isElastic = false
-	siteQuery := fmt.Sprintf(`SELECT * FROM instance_%s WHERE site_id = ? AND is_elastic = 0 AND status = 'available' LIMIT 1 FOR UPDATE`, zoneID)
+	siteQuery := fmt.Sprintf(`SELECT * FROM instance_%s WHERE site_id = ? AND is_elastic = 0 AND status = 'available' LIMIT 1`, zoneID)
 	// 先查询边缘是否有可用实例
 	err = tx.QueryRow(siteQuery, siteID).Scan(&instance.SiteID, &instance.ServerIP, &instance.InstanceID, &instance.PodName, &instance.Port, &instance.IsElastic, &instance.Status, &instance.DeviceId)
 	if err == sql.ErrNoRows { // 如果边缘没有的可用实例，再获取中心的可用实例
 		isElastic = true
-		centerQuery := fmt.Sprintf(`SELECT * FROM instance_%s WHERE is_elastic = 1 AND status = 'available' LIMIT 1 FOR UPDATE`, zoneID)
+		centerQuery := fmt.Sprintf(`SELECT * FROM instance_%s WHERE is_elastic = 1 AND status = 'available' LIMIT 1`, zoneID)
 		err = tx.QueryRow(centerQuery).Scan(&instance.SiteID, &instance.ServerIP, &instance.InstanceID, &instance.PodName, &instance.Port, &instance.IsElastic, &instance.Status, &instance.DeviceId)
 	}
 
