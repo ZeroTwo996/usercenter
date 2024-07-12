@@ -4,9 +4,11 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 )
 
 var (
+	RECORDENABLED  = false  // 是否开启定时记录任务，默认关闭（需要记录真实时间，模拟时不可以开启，模拟时由fakeuser实现记录）
 	USERCENTERPORT = "8888" // 用户交互模块服务端口
 
 	K8SNAMSPACE       string // K8S命名空间
@@ -49,11 +51,18 @@ func init() {
 		log.Fatalf("Failed to get mysql database from env")
 	}
 
+	RECORDENABLEDSTR := os.Getenv("USERCENTER_RECORD_ENABLED")
+	if RECORDENABLEDSTR != "" {
+		RECORDENABLED = strings.EqualFold(RECORDENABLEDSTR, "true")
+	}
+
 	var err error
 	ACCELERATIONRATIO, err = strconv.Atoi(os.Getenv("ACCELERATION_RATIO"))
 	if err != nil {
 		log.Fatal("Failed to get acceleration ratio from env")
-	} else if ACCELERATIONRATIO == 0 {
-		log.Fatal("Acceleration ratio cannot be zero")
+	} else if ACCELERATIONRATIO <= 0 {
+		log.Fatal("Acceleration ratio must be positive")
+	} else if ACCELERATIONRATIO > 1 {
+		RECORDENABLED = false // 加速的情况下，禁止启用定时记录任务
 	}
 }

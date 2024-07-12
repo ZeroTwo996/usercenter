@@ -22,6 +22,10 @@ import (
 )
 
 func startRecord() {
+	if !config.RECORDENABLED { // 未启用则直接返回
+		return
+	}
+
 	zones, err := service.GetZoneListInDB()
 	if err != nil {
 		log.Printf("Failed to get zone list in database: %s", err.Error())
@@ -39,22 +43,27 @@ func startRecord() {
 		for zoneID, sites := range zones {
 			for _, siteID := range sites {
 				wg.Add(1)
-				go func(zoneID string, siteID string, dateStr string) {
+				go func(zoneID string, siteID string, curTime time.Time) {
 					defer wg.Done()
-					// 查询 site 的实例数
+					// 1. 查询site正在使用中的实例数
 					instances, err := service.RecordCountForSite(zoneID, siteID)
 					if err != nil {
-						fmt.Printf("Failed to get instance count for site %s: %v\n", siteID, err)
+						log.Printf("Failed to get instance count for site %s: %v", siteID, err)
 						return
 					}
-					fmt.Printf("%s: Site %s has %d instances\n", dateStr, siteID, instances)
-
-					// 插入最新数据
-					err = service.InsertRecord(zoneID, siteID, dateStr, instances)
+					// 2. 查询site过去一分钟登录失败的次数
+					loginFailures, err := service.QueryLoginFailures(zoneID, siteID, curTime, time.Minute)
 					if err != nil {
-						fmt.Printf("Failed to insert record for site %s: %v\n", siteID, err)
+						log.Printf("Failed to get login failures for site %s: %v", siteID, err)
+						return
 					}
-				}(zoneID, siteID, curTime.Format("2006-01-02 15:04:00"))
+					fmt.Printf("%s: Site %s has %d instances now, and %d devices failed to log in last one minute\n", curTime.Format("2006-01-02 15:04:00"), siteID, instances, loginFailures)
+					// 3. 插入最新数据
+					err = service.InsertRecord(zoneID, siteID, curTime.Format("2006-01-02 15:04:00"), instances, loginFailures)
+					if err != nil {
+						log.Printf("Failed to insert record for site %s: %v", siteID, err)
+					}
+				}(zoneID, siteID, curTime)
 			}
 		}
 		wg.Wait()
@@ -104,8 +113,7 @@ func main() {
 		RetryPeriod:   2 * time.Second,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
-				// 启动记录任务
-				// startRecord()
+				startRecord()
 			},
 			OnStoppedLeading: func() {
 				klog.Fatalf("leaderelection lost")

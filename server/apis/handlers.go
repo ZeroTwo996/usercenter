@@ -3,6 +3,8 @@ package apis
 import (
 	"log"
 	"net/http"
+	"time"
+	"usercenter/config"
 	"usercenter/database/model"
 	"usercenter/database/service"
 )
@@ -28,6 +30,9 @@ func DeviceLogin(w http.ResponseWriter, r *http.Request) {
 
 	instance, err := service.GetInstanceAndLogin(zoneID, siteID, deviceID)
 	if err != nil {
+		if config.RECORDENABLED {
+			service.InsertLoginFailure(zoneID, siteID, time.Now(), deviceID)
+		}
 		log.Printf("Failed to login: %v", err)
 		SendErrorResponse(w, &ErrorCodeWithMessage{
 			HttpStatus: http.StatusBadRequest,
